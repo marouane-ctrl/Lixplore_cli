@@ -95,21 +95,34 @@ def subject(results: List[AlertResult]) -> str:
 def messages(results: List[AlertResult], failures: List[str], style: str, limit: int) -> List[str]:
     """Chat-formatted digest split into messages of at most `limit` bytes."""
     esc, bold, italic, link = _STYLES[style]
+    discord = style == "discord"
     blocks = [bold(esc("📚 " + subject(results)))]
     for r in results:
-        head = "\n" + bold(esc(f"🔎 {r.name}")) + esc(f" — {r.total} new")
-        if r.total:
-            head += " " + italic(esc(f"({_counts(r.counts)})"))
-        blocks.append(head)
+        if discord:
+            blocks.append("\n## " + esc(f"🔎 {r.name} — {r.total} new"))
+            sub = f"`{r.query}`"
+            if r.total:
+                sub += " · " + esc(_counts(r.counts))
+            blocks.append("-# " + sub)
+        else:
+            head = "\n" + bold(esc(f"🔎 {r.name}")) + esc(f" — {r.total} new")
+            if r.total:
+                head += " " + italic(esc(f"({_counts(r.counts)})"))
+            blocks.append(head)
         for source, articles in r.by_source.items():
             blocks.append(bold(esc(f"▸ {_source_head(r, source)}")))
             for i, a in enumerate(articles, 1):
                 title = esc(a.get("title") or "Untitled")
                 url = _link(a)
-                line = f"{i}. " + (link(title, url) if url else title)
                 meta = " · ".join(x for x in (_authors(a), a.get("journal") or "", str(a.get("year") or "")) if x)
-                if meta:
-                    line += "\n    " + italic(esc(meta))
+                if discord:
+                    line = f"**{i}.** " + (link(title, url) if url else title)
+                    if meta:
+                        line += "\n-# " + esc(meta)
+                else:
+                    line = f"{i}. " + (link(title, url) if url else title)
+                    if meta:
+                        line += "\n    " + italic(esc(meta))
                 blocks.append(line)
     if failures:
         blocks.append("\n" + esc("⚠️ Failed: " + "; ".join(failures)))

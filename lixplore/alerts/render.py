@@ -3,6 +3,7 @@ Turns alert results into Telegram, email (HTML + text) and Markdown digests.
 """
 
 import html
+import re
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Dict, List, Optional
@@ -87,6 +88,11 @@ def _counts(counts: Dict[str, int]) -> str:
     return ", ".join(f"{_label(s)} {n}" for s, n in counts.items() if n)
 
 
+def _clean(text: str) -> str:
+    """Remove HTML tags such as <sub>1</sub> that some databases put in titles."""
+    return re.sub(r"<[^>]+>", "", text)
+
+
 def subject(results: List[AlertResult]) -> str:
     total = sum(r.total for r in results)
     return f"Lixplore: {total} new paper{'s' if total != 1 else ''} ({date.today():%d %b %Y})"
@@ -110,15 +116,17 @@ def messages(results: List[AlertResult], failures: List[str], style: str, limit:
                 head += " " + italic(esc(f"({_counts(r.counts)})"))
             blocks.append(head)
         for source, articles in r.by_source.items():
+            if discord and not articles:
+                continue  # hide sources with nothing new
             blocks.append(bold(esc(f"▸ {_source_head(r, source)}")))
             for i, a in enumerate(articles, 1):
-                title = esc(a.get("title") or "Untitled")
+                title = esc(_clean(a.get("title") or "Untitled"))
                 url = _link(a)
                 meta = " · ".join(x for x in (_authors(a), a.get("journal") or "", str(a.get("year") or "")) if x)
                 if discord:
                     line = f"**{i}.** " + (link(title, url) if url else title)
                     if meta:
-                        line += "\n-# " + esc(meta)
+                        line += "\n-# " + esc(_clean(meta))
                 else:
                     line = f"{i}. " + (link(title, url) if url else title)
                     if meta:
